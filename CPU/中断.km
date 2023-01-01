@@ -1,0 +1,114 @@
+{
+    "root": {
+        "data": {
+            "id": "cpgj6huunaw0",
+            "created": 1672543476559,
+            "text": "中断"
+        },
+        "children": [
+            {
+                "data": {
+                    "id": "cpgj6o35xgg0",
+                    "created": 1672543490122,
+                    "text": "硬中断"
+                },
+                "children": []
+            },
+            {
+                "data": {
+                    "id": "cpgj6qvxzaw0",
+                    "created": 1672543496216,
+                    "text": "下半部"
+                },
+                "children": [
+                    {
+                        "data": {
+                            "id": "cpgj6y97cgo0",
+                            "created": 1672543512255,
+                            "text": "softirq",
+                            "layout_left_offset": {
+                                "x": 1,
+                                "y": 1
+                            }
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "cpgj7w6bj3s0",
+                                    "created": 1672543586092,
+                                    "text": "管理结构：struct softirq_action",
+                                    "note": "```c\nstruct softirq_action\n{\n\tvoid\t(*action)(struct softirq_action *);\n};\n```"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgj95pxiqo0",
+                                    "created": 1672543685233,
+                                    "text": "软中断类型：NR_SOFTIRQS",
+                                    "note": "```c\nenum\n{\n\tHI_SOFTIRQ=0,\n\tTIMER_SOFTIRQ,\n\tNET_TX_SOFTIRQ,\n\tNET_RX_SOFTIRQ,\n\tBLOCK_SOFTIRQ,\n\tIRQ_POLL_SOFTIRQ,\n\tTASKLET_SOFTIRQ,\n\tSCHED_SOFTIRQ,\n\tHRTIMER_SOFTIRQ,\n\tRCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */\n\n\tNR_SOFTIRQS\n};\n\n```"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgj9vx57740",
+                                    "created": 1672543742265,
+                                    "text": "全局变量：softirq_vec",
+                                    "note": "```\nstatic struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;\n```"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgjbfa2f9k0",
+                                    "created": 1672543862769,
+                                    "text": "cpu管理软中断：irq_cpustat_t",
+                                    "note": "```c\ntypedef struct {\n\tunsigned int __softirq_pending;\n} ____cacheline_aligned irq_cpustat_t;\n```\n内核为每个cpu管理一个待决中断变量pending， 该字段中的每个bit，对应着某一个软中断，某个bit被置位，说明有相应的软中断等待处理。"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgjeac6me80",
+                                    "created": 1672544087106,
+                                    "text": "软中断的守护进程：ksoftirqd",
+                                    "note": "```c\nDEFINE_PER_CPU(struct task_struct *, ksoftirqd);\n```\n内核为每个cpu创建一个用于执行软中断的守护进程ksoftirqd，同时定义一个per_cpu变量用于保护每个守护进程的task_struct结构指针。大多数的情况下，软中断会在irq_exit阶段被执行，该行为只会执行特定数量的软中断，没有执行完毕的软中断会在守护进程下执行；"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgjhjwwrm80",
+                                    "created": 1672544343043,
+                                    "text": "出发软中断：raise_softirq",
+                                    "note": "```c\nvoid raise_softirq(unsigned int nr)\n{\n\tunsigned long flags;\n\n\tlocal_irq_save(flags);\n\traise_softirq_irqoff(nr);\n\tlocal_irq_restore(flags);\n}\n```\nlocal_irq_save()函数实际上调用了对应的体系结构的arch_local_irq_save函数，下面代码为arm64中的实现：\n```c\nstatic inline void arch_local_irq_disable(void)\n{\n\tif (system_has_prio_mask_debugging()) {\n\t\tu32 pmr = read_sysreg_s(SYS_ICC_PMR_EL1);\n\n\t\tWARN_ON_ONCE(pmr != GIC_PRIO_IRQON && pmr != GIC_PRIO_IRQOFF);\n\t}\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"msr\tdaifset, #2\t\t// arch_local_irq_disable\",\n\t\t__msr_s(SYS_ICC_PMR_EL1, \"%0\"),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t:\n\t\t: \"r\" ((unsigned long) GIC_PRIO_IRQOFF)\n\t\t: \"memory\");\n}\n\n/*\n * Save the current interrupt enable state.\n */\nstatic inline unsigned long arch_local_save_flags(void)\n{\n\tunsigned long flags;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"mrs\t%0, daif\",\n\t\t__mrs_s(\"%0\", SYS_ICC_PMR_EL1),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (flags)\n\t\t:\n\t\t: \"memory\");\n\n\treturn flags;\n}\n\nstatic inline int arch_irqs_disabled_flags(unsigned long flags)\n{\n\tint res;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"and\t%w0, %w1, #\" __stringify(PSR_I_BIT),\n\t\t\"eor\t%w0, %w1, #\" __stringify(GIC_PRIO_IRQON),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (res)\n\t\t: \"r\" ((int) flags)\n\t\t: \"memory\");\n\n\treturn res;\n}\n\nstatic inline int arch_irqs_disabled(void)\n{\n\treturn arch_irqs_disabled_flags(arch_local_save_flags());\n}\n\nstatic inline unsigned long arch_local_irq_save(void)\n{\n\tunsigned long flags;\n\n\tflags = arch_local_save_flags();\n\n\t/*\n\t * There are too many states with IRQs disabled, just keep the current\n\t * state if interrupts are already disabled/masked.\n\t */\n\tif (!arch_irqs_disabled_flags(flags))\n\t\tarch_local_irq_disable();\n\n\treturn flags;\n}\n```\n"
+                                },
+                                "children": []
+                            }
+                        ]
+                    },
+                    {
+                        "data": {
+                            "id": "cpgj7eblmwo0",
+                            "created": 1672543547229,
+                            "text": "tasklet"
+                        },
+                        "children": []
+                    },
+                    {
+                        "data": {
+                            "id": "cpgj7izmn9k0",
+                            "created": 1672543557389,
+                            "text": "workqueue"
+                        },
+                        "children": []
+                    }
+                ]
+            }
+        ]
+    },
+    "template": "default",
+    "theme": "fresh-blue",
+    "version": "1.4.43"
+}
