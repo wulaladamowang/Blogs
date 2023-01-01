@@ -37,7 +37,8 @@
                                     "id": "cpgj7w6bj3s0",
                                     "created": 1672543586092,
                                     "text": "管理结构：struct softirq_action",
-                                    "note": "```c\nstruct softirq_action\n{\n\tvoid\t(*action)(struct softirq_action *);\n};\n```"
+                                    "note": "```c\nstruct softirq_action\n{\n\tvoid\t(*action)(struct softirq_action *);\n};\n```",
+                                    "background": "#ffff00"
                                 },
                                 "children": []
                             },
@@ -46,7 +47,8 @@
                                     "id": "cpgj95pxiqo0",
                                     "created": 1672543685233,
                                     "text": "软中断类型：NR_SOFTIRQS",
-                                    "note": "```c\nenum\n{\n\tHI_SOFTIRQ=0,\n\tTIMER_SOFTIRQ,\n\tNET_TX_SOFTIRQ,\n\tNET_RX_SOFTIRQ,\n\tBLOCK_SOFTIRQ,\n\tIRQ_POLL_SOFTIRQ,\n\tTASKLET_SOFTIRQ,\n\tSCHED_SOFTIRQ,\n\tHRTIMER_SOFTIRQ,\n\tRCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */\n\n\tNR_SOFTIRQS\n};\n\n```"
+                                    "note": "```c\nenum\n{\n\tHI_SOFTIRQ=0,\n\tTIMER_SOFTIRQ,\n\tNET_TX_SOFTIRQ,\n\tNET_RX_SOFTIRQ,\n\tBLOCK_SOFTIRQ,\n\tIRQ_POLL_SOFTIRQ,\n\tTASKLET_SOFTIRQ,\n\tSCHED_SOFTIRQ,\n\tHRTIMER_SOFTIRQ,\n\tRCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */\n\n\tNR_SOFTIRQS\n};\n\n```",
+                                    "background": "#ffff00"
                                 },
                                 "children": []
                             },
@@ -54,8 +56,9 @@
                                 "data": {
                                     "id": "cpgj9vx57740",
                                     "created": 1672543742265,
-                                    "text": "全局变量：softirq_vec",
-                                    "note": "```\nstatic struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;\n```"
+                                    "text": "软中断全局结构：softirq_vec[NR_SOFTIRQS] ",
+                                    "note": "```\nstatic struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;\n```",
+                                    "background": "#ffff00"
                                 },
                                 "children": []
                             },
@@ -81,8 +84,59 @@
                                 "data": {
                                     "id": "cpgjhjwwrm80",
                                     "created": 1672544343043,
-                                    "text": "出发软中断：raise_softirq",
+                                    "text": "触发软中断：raise_softirq",
                                     "note": "```c\nvoid raise_softirq(unsigned int nr)\n{\n\tunsigned long flags;\n\n\tlocal_irq_save(flags);\n\traise_softirq_irqoff(nr);\n\tlocal_irq_restore(flags);\n}\n```\nlocal_irq_save()函数实际上调用了对应的体系结构的arch_local_irq_save函数，下面代码为arm64中的实现：\n```c\nstatic inline void arch_local_irq_disable(void)\n{\n\tif (system_has_prio_mask_debugging()) {\n\t\tu32 pmr = read_sysreg_s(SYS_ICC_PMR_EL1);\n\n\t\tWARN_ON_ONCE(pmr != GIC_PRIO_IRQON && pmr != GIC_PRIO_IRQOFF);\n\t}\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"msr\tdaifset, #2\t\t// arch_local_irq_disable\",\n\t\t__msr_s(SYS_ICC_PMR_EL1, \"%0\"),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t:\n\t\t: \"r\" ((unsigned long) GIC_PRIO_IRQOFF)\n\t\t: \"memory\");\n}\n\n/*\n * Save the current interrupt enable state.\n */\nstatic inline unsigned long arch_local_save_flags(void)\n{\n\tunsigned long flags;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"mrs\t%0, daif\",\n\t\t__mrs_s(\"%0\", SYS_ICC_PMR_EL1),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (flags)\n\t\t:\n\t\t: \"memory\");\n\n\treturn flags;\n}\n\nstatic inline int arch_irqs_disabled_flags(unsigned long flags)\n{\n\tint res;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"and\t%w0, %w1, #\" __stringify(PSR_I_BIT),\n\t\t\"eor\t%w0, %w1, #\" __stringify(GIC_PRIO_IRQON),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (res)\n\t\t: \"r\" ((int) flags)\n\t\t: \"memory\");\n\n\treturn res;\n}\n\nstatic inline int arch_irqs_disabled(void)\n{\n\treturn arch_irqs_disabled_flags(arch_local_save_flags());\n}\n\nstatic inline unsigned long arch_local_irq_save(void)\n{\n\tunsigned long flags;\n\n\tflags = arch_local_save_flags();\n\n\t/*\n\t * There are too many states with IRQs disabled, just keep the current\n\t * state if interrupts are already disabled/masked.\n\t */\n\tif (!arch_irqs_disabled_flags(flags))\n\t\tarch_local_irq_disable();\n\n\treturn flags;\n}\n```\n"
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cpgyq5bi3m80",
+                                            "created": 1672587333200,
+                                            "text": "保存状态寄存器flag以及关闭中断：local_irq_save"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cpgyrfd82z40",
+                                            "created": 1672587433436,
+                                            "text": "核心函数：raise_softirq_off"
+                                        },
+                                        "children": [
+                                            {
+                                                "data": {
+                                                    "id": "cpgysqma84g0",
+                                                    "created": 1672587536292,
+                                                    "text": "将对应的中断位置位：__raise_softirq_irqoff(nr) irq_stat[NR_CPUS]"
+                                                },
+                                                "children": []
+                                            },
+                                            {
+                                                "data": {
+                                                    "id": "cpgyt4v99og0",
+                                                    "created": 1672587567310,
+                                                    "text": "如果不在中断上下文中，就唤醒守护进程：if (!in_interrupt()) wakeup_softirqd();"
+                                                },
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cpgys75i8bk0",
+                                            "created": 1672587493919,
+                                            "text": "恢复状态寄存器flag以及开启中断：local_irq_restore"
+                                        },
+                                        "children": []
+                                    }
+                                ]
+                            },
+                            {
+                                "data": {
+                                    "id": "cpgyytpwaq80",
+                                    "created": 1672588013226,
+                                    "text": "执行软中断：__do_softirq",
+                                    "note": "```c\nasmlinkage void __do_softirq(void)\n{\n        ......\n    pending = local_softirq_pending();\n\n    __local_bh_disable((unsigned long)__builtin_return_address(0),\n                SOFTIRQ_OFFSET);\nrestart:\n    /* Reset the pending bitmask before enabling irqs */\n    set_softirq_pending(0);\n\n    local_irq_enable();\n\n    h = softirq_vec;\n\n    do {\n        if (pending & 1) {\n     ......\n            trace_softirq_entry(vec_nr);\n            h->action(h);\n            trace_softirq_exit(vec_nr);\n                        ......\n        }\n        h++;\n        pending >>= 1;\n    } while (pending);\n\n    local_irq_disable();\n\n    pending = local_softirq_pending();\n    if (pending && --max_restart)\n        goto restart;\n\n    if (pending)\n        wakeup_softirqd();\n\n    lockdep_softirq_exit();\n\n    __local_bh_enable(SOFTIRQ_OFFSET);\n}\n```\n首先取出pending的状态；\n禁止软中断，主要是为了防止和软中断守护进程发生竞争；\n清除所有的软中断待决标志；\n打开本地cpu中断；\n循环执行待决软中断的回调函数；\n如果循环完毕，发现新的软中断被触发，则重新启动循环，直到以下条件满足，才退出：\n没有新的软中断等待执行；\n循环已经达到最大的循环次数MAX_SOFTIRQ_RESTART，目前的设定值时10次；\n如果经过MAX_SOFTIRQ_RESTART次循环后还未处理完，则激活守护进程，处理剩下的软中断；\n推出前恢复软中断；"
                                 },
                                 "children": []
                             }
@@ -109,6 +163,6 @@
         ]
     },
     "template": "default",
-    "theme": "fresh-blue",
+    "theme": "fresh-green",
     "version": "1.4.43"
 }
