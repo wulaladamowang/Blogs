@@ -63,9 +63,11 @@ __asm__　__volatile__("InSTructiON List" : Output : Input : Clobber/Modify);
 |---|---|---|---|
 |MRS|move to register from State register:将程序状态寄存器内容传送到通用寄存器|MRS R0,CPSR|传送CPSR的内容到R0|
 |MSR|move to state register from register:将操作数的内容传送到程序状态寄存器的待定域中，操作数可以是通用寄存器或立即数|MSR CPSR, R0|将R0的内容传到CPSR|
+|BSFL|扫描操作数op1，找到第一个非0bit位，将非0bit位的索引下标(从0开始计数)存入op2,扫描从低位到高位扫描(也就是从右->左)|bsfl %1, %0|找到%1第一个非0的bit位,注意，%0为0时，其没有意义|
 ## 常用寄存器
 |寄存器|释义|作用|举例|
 |---|---|---|---|
 |DAIF|d:debugexception mask, a：serror interrupt mask, i：irq interrupt mask, f: FIQ interrut mask|||
 |CPSR|当前程序状态寄存器|32位的程序状态寄存器可分为4个域；位[31：24]为条件标志位域，用f表示；位[23：16]为状态位域，用s表示；位[15：8]为扩展位域，用x表示；位[7：0]为控制位域，用c表示 |MSR CPSR_c，R0 传送R0的内容到SPSR，但仅仅修改CPSR中的控制位域|
+
 

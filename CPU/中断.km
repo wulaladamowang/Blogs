@@ -10,9 +10,69 @@
                 "data": {
                     "id": "cpgj6o35xgg0",
                     "created": 1672543490122,
-                    "text": "硬中断"
+                    "text": "IRQ"
                 },
-                "children": []
+                "children": [
+                    {
+                        "data": {
+                            "id": "cphk3s47mrs0",
+                            "created": 1672647644867,
+                            "text": "IRQ数据结构"
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "cphk4076yio0",
+                                    "created": 1672647662461,
+                                    "text": "irq_desc_t描述符来描述中断向量"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cphk4gfe5a00",
+                                    "created": 1672647697786,
+                                    "text": "irq_dest_t组成irq_desc数组"
+                                },
+                                "children": []
+                            }
+                        ]
+                    },
+                    {
+                        "data": {
+                            "id": "cphk8y4lnc00",
+                            "created": 1672648049772,
+                            "text": "irq的处理流程"
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "cphk90x5s5c0",
+                                    "created": 1672648055852,
+                                    "text": "__do_IRQ中handle_IRQ_event(irq, regs, irq_desc[irq].action)"
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cphk9z5rg3s0",
+                                            "created": 1672648130383,
+                                            "text": "结构体成员action是中断服务例程的链表头"
+                                        },
+                                        "children": []
+                                    }
+                                ]
+                            },
+                            {
+                                "data": {
+                                    "id": "cphkag9yxb40",
+                                    "created": 1672648167643,
+                                    "text": "通过action的链表头，循环执行中断服务例程"
+                                },
+                                "children": []
+                            }
+                        ]
+                    }
+                ]
             },
             {
                 "data": {
@@ -84,7 +144,7 @@
                                 "data": {
                                     "id": "cpgjhjwwrm80",
                                     "created": 1672544343043,
-                                    "text": "触发软中断：raise_softirq",
+                                    "text": "触发软中断：raise_softirq, 传入参数为触发的对应的软中断号",
                                     "note": "```c\nvoid raise_softirq(unsigned int nr)\n{\n\tunsigned long flags;\n\n\tlocal_irq_save(flags);\n\traise_softirq_irqoff(nr);\n\tlocal_irq_restore(flags);\n}\n```\nlocal_irq_save()函数实际上调用了对应的体系结构的arch_local_irq_save函数，下面代码为arm64中的实现：\n```c\nstatic inline void arch_local_irq_disable(void)\n{\n\tif (system_has_prio_mask_debugging()) {\n\t\tu32 pmr = read_sysreg_s(SYS_ICC_PMR_EL1);\n\n\t\tWARN_ON_ONCE(pmr != GIC_PRIO_IRQON && pmr != GIC_PRIO_IRQOFF);\n\t}\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"msr\tdaifset, #2\t\t// arch_local_irq_disable\",\n\t\t__msr_s(SYS_ICC_PMR_EL1, \"%0\"),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t:\n\t\t: \"r\" ((unsigned long) GIC_PRIO_IRQOFF)\n\t\t: \"memory\");\n}\n\n/*\n * Save the current interrupt enable state.\n */\nstatic inline unsigned long arch_local_save_flags(void)\n{\n\tunsigned long flags;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"mrs\t%0, daif\",\n\t\t__mrs_s(\"%0\", SYS_ICC_PMR_EL1),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (flags)\n\t\t:\n\t\t: \"memory\");\n\n\treturn flags;\n}\n\nstatic inline int arch_irqs_disabled_flags(unsigned long flags)\n{\n\tint res;\n\n\tasm volatile(ALTERNATIVE(\n\t\t\"and\t%w0, %w1, #\" __stringify(PSR_I_BIT),\n\t\t\"eor\t%w0, %w1, #\" __stringify(GIC_PRIO_IRQON),\n\t\tARM64_HAS_IRQ_PRIO_MASKING)\n\t\t: \"=&r\" (res)\n\t\t: \"r\" ((int) flags)\n\t\t: \"memory\");\n\n\treturn res;\n}\n\nstatic inline int arch_irqs_disabled(void)\n{\n\treturn arch_irqs_disabled_flags(arch_local_save_flags());\n}\n\nstatic inline unsigned long arch_local_irq_save(void)\n{\n\tunsigned long flags;\n\n\tflags = arch_local_save_flags();\n\n\t/*\n\t * There are too many states with IRQs disabled, just keep the current\n\t * state if interrupts are already disabled/masked.\n\t */\n\tif (!arch_irqs_disabled_flags(flags))\n\t\tarch_local_irq_disable();\n\n\treturn flags;\n}\n```\n"
                                 },
                                 "children": [
@@ -138,7 +198,16 @@
                                     "text": "执行软中断：__do_softirq",
                                     "note": "```c\nasmlinkage void __do_softirq(void)\n{\n        ......\n    pending = local_softirq_pending();\n\n    __local_bh_disable((unsigned long)__builtin_return_address(0),\n                SOFTIRQ_OFFSET);\nrestart:\n    /* Reset the pending bitmask before enabling irqs */\n    set_softirq_pending(0);\n\n    local_irq_enable();\n\n    h = softirq_vec;\n\n    do {\n        if (pending & 1) {\n     ......\n            trace_softirq_entry(vec_nr);\n            h->action(h);\n            trace_softirq_exit(vec_nr);\n                        ......\n        }\n        h++;\n        pending >>= 1;\n    } while (pending);\n\n    local_irq_disable();\n\n    pending = local_softirq_pending();\n    if (pending && --max_restart)\n        goto restart;\n\n    if (pending)\n        wakeup_softirqd();\n\n    lockdep_softirq_exit();\n\n    __local_bh_enable(SOFTIRQ_OFFSET);\n}\n```\n首先取出pending的状态；\n禁止软中断，主要是为了防止和软中断守护进程发生竞争；\n清除所有的软中断待决标志；\n打开本地cpu中断；\n循环执行待决软中断的回调函数；\n如果循环完毕，发现新的软中断被触发，则重新启动循环，直到以下条件满足，才退出：\n没有新的软中断等待执行；\n循环已经达到最大的循环次数MAX_SOFTIRQ_RESTART，目前的设定值时10次；\n如果经过MAX_SOFTIRQ_RESTART次循环后还未处理完，则激活守护进程，处理剩下的软中断；\n推出前恢复软中断；"
                                 },
-                                "children": []
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cphkf6ydp3s0",
+                                            "created": 1672648539172,
+                                            "text": "在循环中会依次的执行pending的action函数"
+                                        },
+                                        "children": []
+                                    }
+                                ]
                             }
                         ]
                     },
@@ -148,7 +217,133 @@
                             "created": 1672543547229,
                             "text": "tasklet"
                         },
-                        "children": []
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "cphkopzx2f40",
+                                    "created": 1672649285901,
+                                    "text": "初始化tasklet_struct: tasklet_init"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "cphkrc7ozwg0",
+                                    "created": 1672649490989,
+                                    "text": "调度tasklet_struct:tasklet_schedule",
+                                    "note": "```c\nstatic inline void tasklet_schedule(struct tasklet_struct *t)\n{\n\tif (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))\n\t\t__tasklet_schedule(t);\n}\n```"
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cphkvqzu0j40",
+                                            "created": 1672649836622,
+                                            "text": "拒绝掉已经调度的tasklet"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphkxu6hnx40",
+                                            "created": 1672650000283,
+                                            "text": "设置好调用函数之后，raise_softirq_irqoff来激活软中断"
+                                        },
+                                        "children": []
+                                    }
+                                ]
+                            },
+                            {
+                                "data": {
+                                    "id": "cphkzh8j97k0",
+                                    "created": 1672650128837,
+                                    "text": "执行tasklet:tasklet_action"
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cphl1q2v5ew0",
+                                            "created": 1672650304813,
+                                            "text": "在每个tasklet执行前，会先尝试获得锁，即将对应的TASK_STATE_RUN置位，从而保证不能在两个cpu上同时运行"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphl0bvqv4o0",
+                                            "created": 1672650195544,
+                                            "text": "在执行回调函数之前会test_and_clear_bit(TASK_STATE_SCHED, &t->state))来清楚sched位置"
+                                        },
+                                        "children": []
+                                    }
+                                ]
+                            },
+                            {
+                                "data": {
+                                    "id": "cphksgqlyhs0",
+                                    "created": 1672649579204,
+                                    "text": "tasklet的结构体：tasklet_struct"
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": "cphksrd66kg0",
+                                            "created": 1672649602336,
+                                            "text": "next：下一个tasklet的指针"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphkt5zh5b40",
+                                            "created": 1672649634160,
+                                            "text": "state:标识tasklet的状态"
+                                        },
+                                        "children": [
+                                            {
+                                                "data": {
+                                                    "id": "cphkrktddk80",
+                                                    "created": 1672649509714,
+                                                    "text": "已经被调度但是还没有开始执行：bit[0]:TASKLET_STATE_SCHED,"
+                                                },
+                                                "children": []
+                                            },
+                                            {
+                                                "data": {
+                                                    "id": "cphks1hht4w0",
+                                                    "created": 1672649546001,
+                                                    "text": "防止多个cpu同时执行:bit[1]:TASKLET_STATE_RUN"
+                                                },
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphku950zq00",
+                                            "created": 1672649719390,
+                                            "text": "count:引用计数，不为0则该tasklet被禁止"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphkus15e1s0",
+                                            "created": 1672649760514,
+                                            "text": "func:执行的函数"
+                                        },
+                                        "children": []
+                                    },
+                                    {
+                                        "data": {
+                                            "id": "cphkuveiz740",
+                                            "created": 1672649767853,
+                                            "text": "data:h函数的参数"
+                                        },
+                                        "children": []
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         "data": {
