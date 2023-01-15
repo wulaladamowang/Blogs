@@ -58,12 +58,21 @@ __asm__　__volatile__("InSTructiON List" : Output : Input : Clobber/Modify);
     ```c
     # define barrier() *asm__volatile*("": : :"memory")
     ```
-## 常用指令
+## 常用指令(arm64和非arm64)
 |指令|含义|举例|解释|
 |---|---|---|---|
 |MRS|move to register from State register:将程序状态寄存器内容传送到通用寄存器|MRS R0,CPSR|传送CPSR的内容到R0|
 |MSR|move to state register from register:将操作数的内容传送到程序状态寄存器的待定域中，操作数可以是通用寄存器或立即数|MSR CPSR, R0|将R0的内容传到CPSR|
 |BSFL|扫描操作数op1，找到第一个非0bit位，将非0bit位的索引下标(从0开始计数)存入op2,扫描从低位到高位扫描(也就是从右->左)|bsfl %1, %0|找到%1第一个非0的bit位,注意，%0为0时，其没有意义|
+|push|先减小esp的数值，然后将源数据复制到堆栈;|push ebp|将栈顶的位置指向ebp，因为该汇编指令不会涉及内存空间的转换，一般为函数的调用使用，所以当该函数执行完毕之后会有pop ebp，将栈中的值再赋值给ebp，从而使得栈的基地址切换到之前的基地址|
+|pop|先弹出值，然后增加esp的数值|pop ebp|上述例子的补充|
+```
+push　　　  ebp　　　　　　　　　 ;ebp入栈　
+mov　　　　 ebp,　esp　　　　　　 ;因为esp是堆栈指针，无法暂借使用，所以得用ebp来存取堆栈　
+...
+mov　　　　esp,　ebp　　　　　　　;恢复esp的值　
+pop　　　　ebp　　　　　　　　　　 ;ebp出栈　
+```
 ## 常用寄存器
 |寄存器|释义|作用|举例|
 |---|---|---|---|
